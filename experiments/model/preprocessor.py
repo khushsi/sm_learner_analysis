@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 
 from experiments.config import constants
-from lib import index
 
 
 class DataProcessor:
@@ -15,7 +14,7 @@ class DataProcessor:
     def sort_assign_interactionid(self, df_interactions):
 
         df_interactions = df_interactions.sort_values(by=['starttime', 'endtime', 'student']).reset_index(drop=True)
-        df_interactions[constants.interactionid_field] = index
+        df_interactions[constants.interactionid_field] = df_interactions.index
 
         return df_interactions
 
@@ -87,28 +86,28 @@ class DataProcessor:
             folds.append({'train_interactions': copy.copy(df_train), 'test_interactions': copy.copy(df_test)})
         self.interaction_folds = folds
 
-    def get_factor_analysis_input(self, dconcepts, type=constants.PFA):
+    def get_interaction_concept_attempts(self, dconcepts):
 
         interaction_concept_attempts = {}
         studentwise_kcwise_current_performance = {}
 
         ## Initialize studentwise_kcwise_current_performance
         for student in self.interactions[constants.student_field].unique():
-            studentwise_kcwise_current_performance[student] = {}
             studentwise_kcwise_current_performance[student] = {concept: 0 for concept in dconcepts.concept_list}
+
         ## Assign Previous Attempts
         for index, row in self.interactions.iterrows():
             itemid = row[constants.item_field]
-            concepts_list = dconcepts.item2concept_dict[itemid]
 
             interaction_concept_attempts[row[constants.interactionid_field]] = {
-            concept: studentwise_kcwise_current_performance[row[constants.student_field]][concept] for concept in
-            concepts_list}
+                concept: studentwise_kcwise_current_performance[row[constants.student_field]][concept] for
+            (concept, weight) in dconcepts.item2concept_dict[itemid]}
 
-            for concept in concepts_list:
+            for (concept, weight) in dconcepts.item2concept_dict[itemid]:
                 studentwise_kcwise_current_performance[row[constants.student_field]][concept] += 1
 
         return interaction_concept_attempts
+
 
 
 
@@ -130,17 +129,20 @@ class Concepts:
         self.fillConcept_dict(df_concept)
 
     def fillConcept_dict(self, df_concept):
-        df_item_group = df_concept.groupby(['itemid']).mean()
+        df_item_group = df_concept.groupby([constants.item_field]).mean()
 
         for index, row in df_item_group.iterrows():
             itemid = str(index)
             self.item2concept_dict[itemid] = []
-            df_item_concept = df_concept[df_concept['itemid'] == itemid]
+            df_item_concept = df_concept[df_concept[constants.item_field] == itemid]
             df_item_concept.sort_values(by=['weight'])
             self.item2concept_dict[itemid] = [(row['concept'], round(float(row['weight']), 2)) for index, row in
                                               df_item_concept.head(self.topn).iterrows()]
 
             for (concept, weight) in self.item2concept_dict[itemid]:
+
+                if concept not in self.concept_list:
+                    self.concept_list.append(concept)
 
                 if concept not in self.concept2item_dict:
                     self.concept2item_dict[concept] = []

@@ -5,10 +5,10 @@ import time
 import pandas as pd
 
 from experiments.config import constants
+from experiments.model.models import PFA
 from experiments.model.preprocessor import DataProcessor, Concepts
 
 start_time = time.time()
-
 
 if __name__ == '__main__':
 
@@ -45,13 +45,13 @@ if __name__ == '__main__':
                                    concept_file=data_folder + concept_file_folder + concept_file, weighted=True, topn=5)
             concept_dictionary[concept_name] = copy.copy(concept_obj)
 
-    for concept_obj in concept_dictionary:
-        interaction_concept_attempts = int_data.get_interaction_concept_attempts(concept_dictionary[concept_obj])
-
     interaction_folds = int_data.studentwise_interaction_folds(no_of_folds=2, split_by_student=0.5,
                                                                split_by_interaction=.5)
 
-
+    for concept_obj in concept_dictionary:
+        con_folds = int_data.get_factor_analysis_input(concept_dictionary[concept_obj], interaction_folds,
+                                                       constants.fields)
+        pfa_mod = PFA(name="pfa" + concept_obj.conceptlistname)
 
 
 

@@ -61,11 +61,19 @@ class DataProcessor:
         interaction_concept_attempts = {}
         studentwise_kcwise_current_attempts = {}
         studentwise_kcwise_current_attempts_success = {}
+        column_list = []
+        # for concept in dconcepts.concept_list:
+        #     column_list.append(constants.kc_attempt_prefix + constants)
+        #     column_list.append(constants.kc_in_step_prefix + constants)
+        #     column_list.append(constants.kc_success_prefix + constants)
+        #     column_list.append(constants.kc_failure_prefix + constants)
 
+        df_concept_interaction_details = pd.DataFrame(columns=column_list)
         ## Initialize studentwise_kcwise_current_performance
         for student in self.interactions()[constants.student_field].unique():
             studentwise_kcwise_current_attempts[student] = {concept: 0 for concept in dconcepts.concept_list}
             studentwise_kcwise_current_attempts_success[student] = {concept: 0 for concept in dconcepts.concept_list}
+
 
         ## Assign Previous Attempts
         ## Assign Previous Success
@@ -86,14 +94,7 @@ class DataProcessor:
 
         return interaction_concept_attempts
 
-    def get_factor_analysis_input(self, dconcepts, folds, fields=[]):
-
-        interaction_concept_attempts = self.get_interaction_concept_attempts(dconcepts)
-        df_interaction_concept_attemps = pd.DataFrame.from_dict(interaction_concept_attempts, orient='index')
-        df_interaction_concept_attemps.columns = [constants.concept_field_prefix + column for column in
-                                                  df_interaction_concept_attemps.columns]
-        df_interaction_concept_attemps[constants.interactionid_field] = df_interaction_concept_attemps.index
-        df_interaction_concept_attemps = df_interaction_concept_attemps.fillna("(0,0)")
+    def get_factor_analysis_interaction_folds(self, folds, fields=[]):
 
         if len(fields) == 0:
             fields = self.interactions().columns
@@ -107,9 +108,7 @@ class DataProcessor:
                 df_temp_interactions = \
                 self.interactions()[self.interactions()[constants.interactionid_field].isin(fold[fold_type].unique())][
                     fields]
-                fa_folds[foldid][fold_type] = pd.merge(df_temp_interactions, df_interaction_concept_attemps,
-                                                       on=constants.interactionid_field, how='inner')
-
+                fa_folds[foldid][fold_type] = df_temp_interactions
         return fa_folds
 
 

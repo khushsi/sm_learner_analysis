@@ -12,7 +12,10 @@ interactionid_field = 'interaction_id'
 interaction_type = 'interaction_type'
 performance_field = 'is_correct'
 conceptwise_attemp_field = 'kc_attempt'
-concept_field_prefix = "CS#_"
+kc_attempt_prefix = "KC#attempts_"
+kc_success_prefix = "KC#success_"
+kc_failure_prefix = "KC#failure_"
+kc_in_step_prefix = "KC#instep_"
 
 #To Be removed constants in future
 questionid_field = "que_id"
@@ -27,3 +30,4 @@ fields = [interactionid_field, interaction_type, student_field, item_field, perf
 train_fold = "train_interactions"
 test_fold = "test_interactions"
 model_fold = "model"
+prediction_fold = "prediction"

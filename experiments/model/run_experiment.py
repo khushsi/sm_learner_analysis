@@ -26,6 +26,7 @@ if __name__ == '__main__':
 
     df_interactions[constants.item_field] = ""
     df_interactions[constants.interaction_type] = 'Read'
+
     for index, row in df_interactions.iterrows():
         if row['is_question'] == 1:
             df_interactions[constants.interaction_type] = 'Quiz'
@@ -48,12 +49,13 @@ if __name__ == '__main__':
     interaction_folds = int_data.studentwise_interaction_folds(no_of_folds=2, split_by_student=0.5,
                                                                split_by_interaction=.5)
 
-    for concept_obj in concept_dictionary:
-        con_folds = int_data.get_factor_analysis_input(concept_dictionary[concept_obj], interaction_folds,
-                                                       constants.fields)
-        pfa_mod = PFA(name="pfa" + concept_obj.conceptlistname)
+    for concept_list_name in concept_dictionary:
+        concept_obj = concept_dictionary[concept_list_name]
+        int_folds = int_data.get_factor_analysis_interaction_folds(interaction_folds, constants.fields)
+        int_con_attempts = int_data.get_interaction_concept_attempts(concept_obj)
+        pfa_mod = PFA(concept_obj.concept_list, name="pfa" + concept_obj.conceptlistname)
 
-
+        pfa_mod.setFolds(int_folds, int_con_attempts)
 
 
     print("end")

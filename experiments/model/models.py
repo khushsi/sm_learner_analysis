@@ -4,6 +4,7 @@ import time
 from sklearn.linear_model import LogisticRegression
 
 from experiments.config import constants
+from lib import index
 
 start_time = time.time()
 import pickle
@@ -11,20 +12,36 @@ import pickle
 
 class PFA:
 
-    def __init__(self, penalty='l2', C=0.01, max_iter=1000, name="expName"):
+    def __init__(self, concept_list, penalty='l2', C=0.01, max_iter=1000, name="expName"):
 
         self.penalty = penalty
         self.C = C
         self.max_iter = max_iter
         self.folds = []
         self.name = name
+        self.concept_list = concept_list
+        self.concept2inx, self.inx2concept = index.getData2Index(self.concept_list)
+
+        self.pfa_columns = self.def_pfa_columns()
+
+    def def_pfa_columns(self):
+        pfa_columns = []
+        pfa_columns.append(constants.item_field)
+        for inx in range(len(self.concept_list)):
+            concept_inx = str(inx)
+            pfa_columns.append(constants.kc_in_step_prefix + concept_inx)
+            pfa_columns.append(constants.kc_success_prefix + concept_inx)
+            pfa_columns.append(constants.kc_failure_prefix + concept_inx)
+        return pfa_columns
 
     def loadClass(self, objfile):
         self = pickle.load(open(objfile))
 
-    def setFolds(self, i_folds):
-        for fold in i_folds:
-            self.folds.append(fold)
+    def setFolds(self, i_interactions_folds, interaction_concept_details):
+
+        for fold_id in i_interactions_folds:
+            if constants.train_fold in i_interactions_folds[fold_id]:
+
 
     def fitFolds(self):
         try:
@@ -32,9 +49,10 @@ class PFA:
                 raise ValueError("No folds set!")
 
             for fold in self.folds:
-                if 'model' in fold:
+                if constants.model_fold in fold:
                     print("already trained")
                     continue
+
                 X_train = fold[constants.train_fold]
                 y_train = fold[constants.test_fold]
                 clf_l2_LR = LogisticRegression(C=self.C, penalty=self.penalty, max_iter=self.max_iter)
@@ -57,8 +75,8 @@ class PFA:
                     print("fold not trained")
                     self.fitFolds()
 
-                X_test = fold['xtest']
-                fold['prediction'] = fold['model'].predict(X_test)
+                X_test = fold[constants.test_fold]
+                fold[constants.prediction_fold] = fold[constants.model_fold].predict(X_test)
 
         except ValueError as ve:
             print(ve)

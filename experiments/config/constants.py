@@ -16,6 +16,10 @@ kc_attempt_prefix = "KC#attempts_"
 kc_success_prefix = "KC#success_"
 kc_failure_prefix = "KC#failure_"
 kc_in_step_prefix = "KC#instep_"
+kc_read_attempt_prefix = "KC#readattempt_"
+step_hardness_prefix = "STEP#hardness_"
+student_prior_prefix = "STU#Prior_"
+outcome_prefix = "OUT#come"
 
 #To Be removed constants in future
 questionid_field = "que_id"
@@ -29,5 +33,9 @@ fields = [interactionid_field, interaction_type, student_field, item_field, perf
 # constants_interaction_folds
 train_fold = "train_interactions"
 test_fold = "test_interactions"
+xtrain = 'xtrain'
+ytrain = 'ytrain'
+xtest = 'xtest'
+ytest = 'ytest'
 model_fold = "model"
 prediction_fold = "prediction"

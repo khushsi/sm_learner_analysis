@@ -10,7 +10,7 @@ from experiments.config import constants
 class DataProcessor:
     def __init__(self, df_interactions):
         self.__interactions = self.sort_assign_interactionid(df_interactions)
-
+        self.studentList = self.__interactions[constants.student_field].unique()
     def interactions(self):
         return self.__interactions
 

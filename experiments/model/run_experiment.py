@@ -5,7 +5,7 @@ import time
 import pandas as pd
 
 from experiments.config import constants
-from experiments.model.models import PFA
+from experiments.model.models import LFA
 from experiments.model.preprocessor import DataProcessor, Concepts
 
 start_time = time.time()
@@ -22,7 +22,7 @@ if __name__ == '__main__':
 
     df_interactions = pd.read_csv(data_folder + student_interaction_file)
     if constants.debug:
-        df_interactions = df_interactions.head(2000)
+        df_interactions = df_interactions.head(600)
 
     df_interactions[constants.item_field] = ""
     df_interactions[constants.interaction_type] = 'Read'
@@ -43,7 +43,8 @@ if __name__ == '__main__':
         for topn in [1]:  # , 2, 5, 10, 15,20,-1]:
             concept_name = concept_name + " : " + str(topn)
             concept_obj = Concepts(name=concept_name,
-                                   concept_file=data_folder + concept_file_folder + concept_file, weighted=True, topn=5)
+                                   concept_file=data_folder + concept_file_folder + concept_file, weighted=True,
+                                   topn=topn)
             concept_dictionary[concept_name] = copy.copy(concept_obj)
 
     interaction_folds = int_data.studentwise_interaction_folds(no_of_folds=2, split_by_student=0.5,
@@ -53,9 +54,11 @@ if __name__ == '__main__':
         concept_obj = concept_dictionary[concept_list_name]
         int_folds = int_data.get_factor_analysis_interaction_folds(interaction_folds, constants.fields)
         int_con_attempts = int_data.get_interaction_concept_attempts(concept_obj)
-        pfa_mod = PFA(concept_obj.concept_list, name="pfa" + concept_obj.conceptlistname)
+        pfa_mod = LFA(concept_obj.concept_list, int_data.studentList, name="lfa" + concept_obj.conceptlistname)
 
         pfa_mod.setFolds(int_folds, int_con_attempts)
+        pfa_mod.fitFolds()
+        pfa_mod.predictFolds()
 
 
     print("end")

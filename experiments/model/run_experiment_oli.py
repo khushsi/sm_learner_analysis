@@ -39,7 +39,6 @@ if __name__ == '__main__':
             df_interactions.loc[index, constants.item_field] = str(df_interactions.loc[index][constants.pageid_field])
             df_interactions.loc[index, constants.performance_field] = row[Discretization_type]
 
-
     int_data = DataProcessor(df_interactions)
     concept_dictionary = {}
 

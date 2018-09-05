@@ -11,6 +11,7 @@ class DataProcessor:
     def __init__(self, df_interactions):
         self.__interactions = self.sort_assign_interactionid(df_interactions)
         self.studentList = self.__interactions[constants.student_field].unique()
+
     def interactions(self):
         return self.__interactions
 
@@ -18,7 +19,8 @@ class DataProcessor:
         df_interactions = df_interactions.drop(
             df_interactions.columns[df_interactions.columns.str.contains('unnamed', case=False)], axis=1)
         df_interactions = df_interactions.sort_values(
-            by=[constants.student_field, constants.starttime_field, constants.endtime_field]).reset_index(drop=True)
+            by=[constants.student_field, constants.group_field, constants.starttime_field,
+                constants.endtime_field]).reset_index(drop=True)
         df_interactions[constants.interactionid_field] = df_interactions.index
 
         return df_interactions
@@ -50,7 +52,7 @@ class DataProcessor:
                 df_train = df_train.append(df_temp_student[0:split_place][constants.interactionid_field])
                 df_test = df_test.append(df_temp_student[split_place + 1:][constants.interactionid_field])
             # print(student_list)
-            print("Fold No" + str(i) + " no of interactions - train  : " + str(len(df_train)) + " test : " + str(
+            print("Fold No: " + str(i) + " no of interactions - train  : " + str(len(df_train)) + " test : " + str(
                 len(df_test)))
             folds.append({'train_interactions': copy.copy(df_train), 'test_interactions': copy.copy(df_test)})
 
@@ -104,7 +106,7 @@ class DataProcessor:
             foldid = len(fa_folds)
             fa_folds[foldid] = {}
             for fold_type in fold:
-                print(foldid, fold_type, len(fold[fold_type]))
+                # print(foldid, fold_type, len(fold[fold_type]))
                 df_temp_interactions = \
                 self.interactions()[self.interactions()[constants.interactionid_field].isin(fold[fold_type].unique())][
                     fields]
@@ -119,7 +121,7 @@ class DataProcessor:
 
 class Concepts:
 
-    def __init__(self, name, concept_file, weighted=False, topn=-1):
+    def __init__(self, name, concept_file, weighted=False, topn=-1, dummy=True):
         df_concept = pd.read_csv(open(concept_file), header=0)
         df_concept[constants.item_field] = df_concept[constants.item_field].astype(str)
         self.weighted = weighted
@@ -142,7 +144,7 @@ class Concepts:
                                               df_item_concept.head(self.topn).iterrows()]
 
             for (concept, weight) in self.item2concept_dict[itemid]:
-
+                concept = str(concept)
                 if concept not in self.concept_list:
                     self.concept_list.append(concept)
 
@@ -151,3 +153,4 @@ class Concepts:
 
                 if itemid not in self.concept2item_dict[concept]:
                     self.concept2item_dict[concept].append(itemid)
+

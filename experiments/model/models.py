@@ -8,8 +8,9 @@ from lib import index
 
 start_time = time.time()
 import pickle
-
-
+from sklearn.feature_extraction import DictVectorizer
+from sklearn.metrics import mean_squared_error, roc_auc_score
+import numpy as np
 class PFA:
 
     def __init__(self, concept_list, student_list=[], step_list=[], penalty='l2', C=0.01, max_iter=1000, name="expName",
@@ -301,28 +302,28 @@ class LFA:
         self.concept_list = concept_list
         self.studentList = student_list
         self.stepList = step_list
-        self.concept2inx, self.inx2concept = index.getData2Index(self.concept_list)
-        self.student2inx, self.inx2student = index.getData2Index(self.studentList)
-        self.step2inx, self.inx2step = index.getData2Index(self.stepList)
-        self.pfa_columns = self.def_pfa_columns()
+        # self.concept2inx, self.inx2concept = index.getData2Index(self.concept_list)
+        # self.student2inx, self.inx2student = index.getData2Index(self.studentList)
+        # self.step2inx, self.inx2step = index.getData2Index(self.stepList)
+        # self.pfa_columns = self.def_pfa_columns()
 
-    def def_pfa_columns(self):
-        pfa_columns = []
-        pfa_columns.append(constants.item_field)
-        for inx in range(len(self.concept_list)):
-            concept_inx = str(inx)
-            pfa_columns.append(constants.kc_in_step_prefix + concept_inx)
-            pfa_columns.append(constants.kc_attempt_prefix + concept_inx)
-
-        if self.is_step_hardness_param:
-            for inx in range(len(self.stepList)):
-                step_inx = str(inx)
-                pfa_columns.append(constants.step_hardness_prefix + step_inx)
-        if self.is_student_prior:
-            for inx in range(len(self.studentList)):
-                student_inx = str(inx)
-                pfa_columns.append(constants.student_prior_prefix + student_inx)
-        return pfa_columns
+    # def def_pfa_columns(self):
+    #     pfa_columns = []
+    #     pfa_columns.append(constants.item_field)
+    #     for inx in range(len(self.concept_list)):
+    #         concept_inx = str(inx)
+    #         pfa_columns.append(constants.kc_in_step_prefix + concept_inx)
+    #         pfa_columns.append(constants.kc_attempt_prefix + concept_inx)
+    #
+    #     if self.is_step_hardness_param:
+    #         for inx in range(len(self.stepList)):
+    #             step_inx = str(inx)
+    #             pfa_columns.append(constants.step_hardness_prefix + step_inx)
+    #     if self.is_student_prior:
+    #         for inx in range(len(self.studentList)):
+    #             student_inx = str(inx)
+    #             pfa_columns.append(constants.student_prior_prefix + student_inx)
+    #     return pfa_columns
 
     def loadClass(self, objfile):
         self = pickle.load(open(objfile))
@@ -337,51 +338,56 @@ class LFA:
                 folds[fold_id][constants.xtrain] = []
                 folds[fold_id][constants.ytrain] = []
                 for index, row in i_interactions_folds[fold_id][constants.train_fold].iterrows():
-                    data_row = [0] * len(self.pfa_columns)
+                    # data_row = [0] * len(self.pfa_columns)
+                    data_row = {}
                     interaction_id = row[constants.interactionid_field]
 
                     for concept in interaction_concept_details[interaction_id]:
-                        concept_id = self.concept2inx[concept]
+                        concept = str(concept)
+                        # concept_id = self.concept2inx[concept]
                         attempts = interaction_concept_details[interaction_id][concept][0]
+
                         # success = interaction_concept_details[interaction_id][concept][1]
 
-                        data_row[self.pfa_columns.index(constants.kc_in_step_prefix + str(concept_id))] = 1
-                        data_row[self.pfa_columns.index(constants.kc_attempt_prefix + str(concept_id))] = attempts
+                        data_row[constants.kc_in_step_prefix + concept] = 1
+                        data_row[constants.kc_attempt_prefix + concept] = attempts + 1
 
                     if self.is_student_prior:
-                        student_id = self.student2inx[row[constants.student_field]]
-                        data_row[self.pfa_columns.index(constants.student_prior_prefix + str(student_id))] = 1
+                        # student_id = self.student2inx[row[constants.student_field]]
+                        data_row[constants.student_prior_prefix + row[constants.student_field]] = 1
 
                     if self.is_step_hardness_param:
-                        step_inx = self.step2inx[row[constants.item_field]]
-                        data_row[self.pfa_columns.index(constants.step_hardness_prefix + str(step_inx))] = 1
+                        # step_inx = self.step2inx[row[constants.item_field]]
+                        data_row[constants.step_hardness_prefix + str(row[constants.item_field])] = 1
 
                     folds[fold_id][constants.xtrain].append(copy.copy(data_row))
                     folds[fold_id][constants.ytrain].append(row[constants.performance_field])
+
 
             if constants.test_fold in i_interactions_folds[fold_id]:
                 folds[fold_id][constants.xtest] = []
                 folds[fold_id][constants.ytest] = []
                 for index, row in i_interactions_folds[fold_id][constants.test_fold].iterrows():
-                    data_row = [0] * len(self.pfa_columns)
+                    # data_row = [0] * len(self.pfa_columns)
+                    data_row = {}
                     interaction_id = row[constants.interactionid_field]
 
                     for concept in interaction_concept_details[interaction_id]:
-                        concept_id = self.concept2inx[concept]
+                        concept = str(concept)
+                        # concept_id = self.concept2inx[concept]
                         attempts = interaction_concept_details[interaction_id][concept][0]
                         success = interaction_concept_details[interaction_id][concept][1]
 
-                        data_row[self.pfa_columns.index(constants.kc_in_step_prefix + str(concept_id))] = 1
+                        data_row[constants.kc_in_step_prefix + concept] = 1
                         # data_row[self.pfa_columns.index(constants.kc_success_prefix + str(concept_id))] = success
-                        data_row[self.pfa_columns.index(constants.kc_attempt_prefix + str(concept_id))] = attempts
+                        data_row[constants.kc_attempt_prefix + concept] = attempts
 
                     if self.is_student_prior:
-                        student_id = self.student2inx[row[constants.student_field]]
-                        data_row[self.pfa_columns.index(constants.student_prior_prefix + str(student_id))] = 1
+                        student_id = row[constants.student_field]
+                        data_row[constants.student_prior_prefix + str(student_id)] = 1
 
                     if self.is_step_hardness_param:
-                        step_inx = self.step2inx[row[constants.item_field]]
-                        data_row[self.pfa_columns.index(constants.step_hardness_prefix + str(step_inx))] = 1
+                        data_row[constants.step_hardness_prefix + row[constants.item_field]] = 1
 
                     folds[fold_id][constants.xtest].append(copy.copy(data_row))
                     folds[fold_id][constants.ytest].append(row[constants.performance_field])
@@ -398,11 +404,14 @@ class LFA:
                     print("already trained")
                     continue
                 fold = self.folds[fold_id]
-                X_train = fold[constants.xtrain]
+                vec = DictVectorizer(sparse=True)
+                X_train = vec.fit_transform(fold[constants.xtrain])
                 y_train = fold[constants.ytrain]
                 clf_l2_LR = LogisticRegression(C=self.C, penalty=self.penalty, max_iter=self.max_iter)
                 clf_l2_LR.fit(X_train, y_train)
                 self.folds[fold_id][constants.model_fold] = copy.copy(clf_l2_LR)
+                self.folds[fold_id][constants.vectorizer] = copy.copy(vec)
+
         except ValueError as ve:
             print(ve)
 
@@ -419,10 +428,32 @@ class LFA:
                 if 'model' not in self.folds[fold_id]:
                     print("fold not trained")
                     self.fitFolds()
+                if constants.prediction_fold in self.folds[fold_id]:
+                    print("folds prediction exists")
+                else:
+                    X_test = self.folds[fold_id][constants.vectorizer].transform(self.folds[fold_id][constants.xtest])
 
-                X_test = self.folds[fold_id][constants.xtest]
-                self.folds[fold_id][constants.prediction_fold] = self.folds[fold_id][constants.model_fold].predict(
-                    X_test)
+                    self.folds[fold_id][constants.prediction_fold] = self.folds[fold_id][constants.model_fold].predict(
+                        X_test)
+
 
         except ValueError as ve:
             print(ve)
+
+    def printResult(self):
+        try:
+            result = []
+            for fold_id in self.folds:
+                if constants.prediction_fold not in self.folds[fold_id]:
+                    print("prediction not done")
+                    self.predictFolds()
+                y_fold_true = self.folds[fold_id][constants.ytest]
+                y_fold_predictions = self.folds[fold_id][constants.prediction_fold]
+                result.append([
+                    roc_auc_score(y_fold_true, y_fold_predictions),
+                    mean_squared_error(y_fold_true, y_fold_predictions)])
+
+            print(self.name, np.mean(result, axis=0))
+
+        except ValueError as e:
+            print(e)

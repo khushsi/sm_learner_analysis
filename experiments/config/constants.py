@@ -8,9 +8,12 @@ item_field = 'item_id'
 concept_field = 'concept'
 starttime_field = 'starttime'
 endtime_field = 'endtime'
+group_field = 'group_id'
 interactionid_field = 'interaction_id'
 interaction_type = 'interaction_type'
-performance_field = 'is_correct'
+performance_field = 'is_interaction_success'
+
+
 conceptwise_attemp_field = 'kc_attempt'
 kc_attempt_prefix = "KC#attempts_"
 kc_success_prefix = "KC#success_"
@@ -24,7 +27,7 @@ outcome_prefix = "OUT#come"
 #To Be removed constants in future
 questionid_field = "que_id"
 pageid_field = "page"
-debug = True
+debug = False
 
 #Split Details
 split_by_student = 0.5
@@ -39,3 +42,4 @@ xtest = 'xtest'
 ytest = 'ytest'
 model_fold = "model"
 prediction_fold = "prediction"
+vectorizer = 'vec'

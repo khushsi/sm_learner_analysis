@@ -1,7 +1,7 @@
 import copy
 import time
 
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, LassoLarsIC
 
 from experiments.config import constants
 from lib import index
@@ -289,19 +289,21 @@ class PFA:
 #     return fold
 class LFA:
 
-    def __init__(self, concept_list, student_list=[], step_list=[], penalty='l2', C=0.01, max_iter=1000, name="expName",
-                 student_param=True, step_hardness_param=False, interaction_type_read=True):
+    def __init__(self, penalty='l2', C=0.01, max_iter=1000, name="expName",
+                 student_param=True, step_hardness_param=False, interaction_type_read=True, train=['Read,Quiz'],
+                 test=['Quiz']):
 
         self.penalty = penalty
         self.C = C
         self.max_iter = max_iter
         self.folds = []
+        self.allrecords = []
         self.is_step_hardness_param = step_hardness_param
         self.is_student_prior = student_param
         self.name = name
-        self.concept_list = concept_list
-        self.studentList = student_list
-        self.stepList = step_list
+
+        # self.studentList = student_list
+        # self.stepList = step_list
         # self.concept2inx, self.inx2concept = index.getData2Index(self.concept_list)
         # self.student2inx, self.inx2student = index.getData2Index(self.studentList)
         # self.step2inx, self.inx2step = index.getData2Index(self.stepList)
@@ -330,7 +332,8 @@ class LFA:
 
     def setFolds(self, i_interactions_folds, interaction_concept_details):
         folds = {}
-
+        all_records_X = []
+        all_records_y = []
         for fold_id in i_interactions_folds:
             folds[fold_id] = {}
 
@@ -343,6 +346,7 @@ class LFA:
                     interaction_id = row[constants.interactionid_field]
 
                     for concept in interaction_concept_details[interaction_id]:
+                        data_row = {}
                         concept = str(concept)
                         # concept_id = self.concept2inx[concept]
                         attempts = interaction_concept_details[interaction_id][concept][0]
@@ -352,16 +356,19 @@ class LFA:
                         data_row[constants.kc_in_step_prefix + concept] = 1
                         data_row[constants.kc_attempt_prefix + concept] = attempts + 1
 
-                    if self.is_student_prior:
-                        # student_id = self.student2inx[row[constants.student_field]]
-                        data_row[constants.student_prior_prefix + row[constants.student_field]] = 1
+                        if self.is_student_prior:
+                            # student_id = self.student2inx[row[constants.student_field]]
+                            data_row[constants.student_prior_prefix + row[constants.student_field]] = 1
 
-                    if self.is_step_hardness_param:
-                        # step_inx = self.step2inx[row[constants.item_field]]
-                        data_row[constants.step_hardness_prefix + str(row[constants.item_field])] = 1
+                        if self.is_step_hardness_param:
+                            # step_inx = self.step2inx[row[constants.item_field]]
+                            data_row[constants.step_hardness_prefix + str(row[constants.item_field])] = 1
 
-                    folds[fold_id][constants.xtrain].append(copy.copy(data_row))
-                    folds[fold_id][constants.ytrain].append(row[constants.performance_field])
+                        folds[fold_id][constants.xtrain].append(copy.copy(data_row))
+                        folds[fold_id][constants.ytrain].append(row[constants.performance_field])
+                        if fold_id == 0:
+                            all_records_X.append(copy.copy(data_row))
+                            all_records_y.append(copy.copy(row[constants.performance_field]))
 
 
             if constants.test_fold in i_interactions_folds[fold_id]:
@@ -373,6 +380,7 @@ class LFA:
                     interaction_id = row[constants.interactionid_field]
 
                     for concept in interaction_concept_details[interaction_id]:
+                        data_row_train = {}
                         concept = str(concept)
                         # concept_id = self.concept2inx[concept]
                         attempts = interaction_concept_details[interaction_id][concept][0]
@@ -381,39 +389,148 @@ class LFA:
                         data_row[constants.kc_in_step_prefix + concept] = 1
                         # data_row[self.pfa_columns.index(constants.kc_success_prefix + str(concept_id))] = success
                         data_row[constants.kc_attempt_prefix + concept] = attempts
+                        data_row_train[constants.kc_in_step_prefix + concept] = 1
+                        data_row_train[constants.kc_attempt_prefix + concept] = attempts
+
+                        if self.is_student_prior:
+                            student_id = row[constants.student_field]
+                            data_row[constants.student_prior_prefix + str(student_id)] = 1
+
+                        if self.is_step_hardness_param:
+                            data_row[constants.step_hardness_prefix + row[constants.item_field]] = 1
+
+                        if fold_id == 0:
+                            all_records_X.append(copy.copy(data_row_train))
+                            all_records_y.append(row[constants.performance_field])
+
+                    folds[fold_id][constants.xtest].append(copy.copy(data_row))
+                    folds[fold_id][constants.ytest].append(row[constants.performance_field])
+        self.allrecords = {'X': all_records_X, "y": all_records_y}
+        print(len(self.allrecords))
+        self.folds = folds
+
+    def setFolds_inline(self, i_interactions_folds):
+        folds = {}
+        all_records_X = []
+        all_records_y = []
+        for fold_id in i_interactions_folds:
+            folds[fold_id] = {}
+
+            if constants.train_fold in i_interactions_folds[fold_id]:
+                folds[fold_id][constants.xtrain] = []
+                folds[fold_id][constants.ytrain] = []
+                for index, row in i_interactions_folds[fold_id][constants.train_fold].iterrows():
+                    # data_row = [0] * len(self.pfa_columns)
+                    data_row = {}
+                    interaction_id = row[constants.interactionid_field]
+
+                    data_row = {}
+                    concept = row[constants.concept_field]
+                    # concept_id = self.concept2inx[concept]
+                    attempts = row[constants.concept_att_field]
+
+                    # success = interaction_concept_details[interaction_id][concept][1]
+
+                    data_row[constants.kc_in_step_prefix + concept] = 1
+                    data_row[constants.kc_attempt_prefix + concept] = attempts
+
+                    if self.is_student_prior:
+                        # student_id = self.student2inx[row[constants.student_field]]
+                        data_row[constants.student_prior_prefix + row[constants.student_field]] = 1
+
+                    if self.is_step_hardness_param:
+                        # step_inx = self.step2inx[row[constants.item_field]]
+                        data_row[constants.step_hardness_prefix + str(row[constants.item_field])] = 1
+
+                    folds[fold_id][constants.xtrain].append(copy.copy(data_row))
+                    folds[fold_id][constants.ytrain].append(row[constants.performance_field])
+                    if fold_id == 0:
+                        all_records_X.append(copy.copy(data_row))
+                        all_records_y.append(copy.copy(row[constants.performance_field]))
+
+            if constants.test_fold in i_interactions_folds[fold_id]:
+                folds[fold_id][constants.xtest] = []
+                folds[fold_id][constants.ytest] = []
+                for index, row in i_interactions_folds[fold_id][constants.test_fold].iterrows():
+                    # data_row = [0] * len(self.pfa_columns)
+                    data_row = {}
+                    interaction_id = row[constants.interactionid_field]
+
+                    data_row_train = {}
+                    concept = row[constants.concept_field]
+                    # concept_id = self.concept2inx[concept]
+                    attempts = row[constants.concept_att_field]
+
+                    data_row[constants.kc_in_step_prefix + concept] = 1
+                    # data_row[self.pfa_columns.index(constants.kc_success_prefix + str(concept_id))] = success
+                    data_row[constants.kc_attempt_prefix + concept] = attempts
+                    data_row_train[constants.kc_in_step_prefix + concept] = 1
+                    data_row_train[constants.kc_attempt_prefix + concept] = attempts
 
                     if self.is_student_prior:
                         student_id = row[constants.student_field]
                         data_row[constants.student_prior_prefix + str(student_id)] = 1
+                        data_row_train[constants.student_prior_prefix + str(student_id)] = 1
 
                     if self.is_step_hardness_param:
                         data_row[constants.step_hardness_prefix + row[constants.item_field]] = 1
+                        data_row_train[constants.step_hardness_prefix + row[constants.item_field]] = 1
+
+                    if fold_id == 0:
+                        all_records_X.append(copy.copy(data_row_train))
+                        all_records_y.append(row[constants.performance_field])
 
                     folds[fold_id][constants.xtest].append(copy.copy(data_row))
                     folds[fold_id][constants.ytest].append(row[constants.performance_field])
-
+        self.allrecords = {'X': all_records_X, "y": all_records_y}
+        print(len(self.allrecords))
         self.folds = folds
 
-    def fitFolds(self):
+    def fitAIC(self):
         try:
             if len(self.folds) == 0:
                 raise ValueError("No folds set!")
 
-            for fold_id in self.folds:
-                if constants.model_fold in self.folds[fold_id]:
-                    print("already trained")
-                    continue
-                fold = self.folds[fold_id]
-                vec = DictVectorizer(sparse=True)
-                X_train = vec.fit_transform(fold[constants.xtrain])
-                y_train = fold[constants.ytrain]
-                clf_l2_LR = LogisticRegression(C=self.C, penalty=self.penalty, max_iter=self.max_iter)
-                clf_l2_LR.fit(X_train, y_train)
-                self.folds[fold_id][constants.model_fold] = copy.copy(clf_l2_LR)
-                self.folds[fold_id][constants.vectorizer] = copy.copy(vec)
+            vec = DictVectorizer(sparse=True)
+            X_train = vec.fit_transform(self.allrecords['X'])
+            y_train = self.allrecords['y']
+            clf_aic = LassoLarsIC(criterion='aic', max_iter=3000, verbose=True)
+            clf_aic.fit(X_train.todense(), y_train)
+            # plot_ic_criterion(clf_aic,"Model AIC","blue")
+            # print("Argmin AIC: " ,np.argmin(clf_aic.criterion))
+            # print("Min AIC: " ,np.min(clf_aic.criterion))
+            clf_bic = LassoLarsIC(criterion='bic', max_iter=3000, verbose=True)
+            clf_bic.fit(X_train.todense(), y_train)
+            # plot_ic_criterion(clf_aic, "Model BIC", "red")
+
+            clf_l2_LR = LogisticRegression(C=self.C, penalty=self.penalty, max_iter=self.max_iter)
+            clf_l2_LR.fit(X_train, y_train)
+            print(clf_l2_LR.aic)
+
+
+
 
         except ValueError as ve:
             print(ve)
+        except Exception as e:
+            print(e)
+
+    def fitFolds(self):
+        if len(self.folds) == 0:
+            raise ValueError("No folds set!")
+
+        for fold_id in self.folds:
+            if constants.model_fold in self.folds[fold_id]:
+                print("already trained")
+                continue
+            fold = self.folds[fold_id]
+            vec = DictVectorizer(sparse=True)
+            X_train = vec.fit_transform(fold[constants.xtrain])
+            y_train = fold[constants.ytrain]
+            clf_l2_LR = LogisticRegression(max_iter=self.max_iter)
+            clf_l2_LR.fit(X_train.toarray(), y_train)
+            self.folds[fold_id][constants.model_fold] = copy.copy(clf_l2_LR)
+            self.folds[fold_id][constants.vectorizer] = copy.copy(vec)
 
     def saveExperiment(self, directory):
         pickle.dump(self, open(directory + "/" + self.name, 'wb'))
@@ -457,3 +574,593 @@ class LFA:
 
         except ValueError as e:
             print(e)
+
+
+class LFA_R:
+
+    def __init__(self, penalty='l2', C=0.01, max_iter=2000, name="expName",
+                 student_param=True, step_hardness_param=False, is_reading_behaviour=False, is_pfa=False,
+                 is_read_skim=False, interaction_type_read=True, prediction_type=[constants.interaction_type_quiz]):
+
+        self.penalty = penalty
+        self.C = C
+        self.max_iter = max_iter
+        self.folds = []
+        self.allrecords = []
+        self.is_step_hardness_param = step_hardness_param
+        self.is_student_prior = student_param
+        self.is_reading_behaviour = is_reading_behaviour
+        self.name = name
+        self.is_pfa = is_pfa
+        self.seperate_reading_behaviour = is_read_skim
+
+    def loadClass(self, objfile):
+        self = pickle.load(open(objfile))
+
+    def setFolds(self, i_interactions_folds, interaction_concept_details):
+        folds = {}
+        all_records_X = []
+        all_records_y = []
+        for fold_id in i_interactions_folds:
+            folds[fold_id] = {}
+
+            if constants.train_fold in i_interactions_folds[fold_id]:
+                folds[fold_id][constants.xtrain] = []
+                folds[fold_id][constants.ytrain] = []
+
+                for index, row in i_interactions_folds[fold_id][constants.train_fold].iterrows():
+                    # data_row = [0] * len(self.pfa_columns)
+                    data_row = {}
+                    interaction_id = row[constants.interactionid_field]
+
+                    for concept in interaction_concept_details[interaction_id]:
+                        data_row = {}
+                        concept = str(concept)
+                        # concept_id = self.concept2inx[concept]
+                        attempts = interaction_concept_details[interaction_id][concept][0]
+                        success = interaction_concept_details[interaction_id][concept][1]
+                        read = interaction_concept_details[interaction_id][concept][2]
+                        skim = interaction_concept_details[interaction_id][concept][3]
+                        failure = attempts - success
+
+                        # success = interaction_concept_details[interaction_id][concept][1]
+                        if self.is_pfa:
+                            data_row[constants.kc_in_step_prefix + concept] = 1
+                            data_row[constants.kc_success_prefix + concept] = success
+                            data_row[constants.kc_failure_prefix + concept] = failure
+
+                        else:
+                            data_row[constants.kc_in_step_prefix + concept] = 1
+                            data_row[constants.kc_attempt_prefix + concept] = attempts + 1
+
+                        if self.is_reading_behaviour:
+                            data_row[constants.kc_read_attempt_prefix + concept] = read
+                        if self.seperate_reading_behaviour:
+                            data_row[constants.kc_skim_attempt_prefix + concept] = skim
+
+                        if self.is_student_prior:
+                            # student_id = self.student2inx[row[constants.student_field]]
+                            data_row[constants.student_prior_prefix + row[constants.student_field]] = 1
+
+                        if self.is_step_hardness_param:
+                            # step_inx = self.step2inx[row[constants.item_field]]
+                            data_row[constants.step_hardness_prefix + str(row[constants.item_field])] = 1
+
+                        folds[fold_id][constants.xtrain].append(copy.copy(data_row))
+                        folds[fold_id][constants.ytrain].append(row[constants.performance_field])
+                        if fold_id == 0:
+                            all_records_X.append(copy.copy(data_row))
+                            all_records_y.append(copy.copy(row[constants.performance_field]))
+
+            if constants.test_fold in i_interactions_folds[fold_id]:
+                folds[fold_id][constants.xtest] = []
+                folds[fold_id][constants.ytest] = []
+                for index, row in i_interactions_folds[fold_id][constants.test_fold].iterrows():
+                    # data_row = [0] * len(self.pfa_columns)
+                    data_row = {}
+                    interaction_id = row[constants.interactionid_field]
+
+                    for concept in interaction_concept_details[interaction_id]:
+                        data_row_train = {}
+                        concept = str(concept)
+                        # concept_id = self.concept2inx[concept]
+                        attempts = interaction_concept_details[interaction_id][concept][0]
+                        success = interaction_concept_details[interaction_id][concept][1]
+                        read = interaction_concept_details[interaction_id][concept][2]
+                        skim = interaction_concept_details[interaction_id][concept][3]
+                        failure = attempts - success
+
+                        if self.is_pfa:
+                            data_row[constants.kc_in_step_prefix + concept] = 1
+                            data_row_train[constants.kc_in_step_prefix + concept] = 1
+
+                            data_row[constants.kc_success_prefix + concept] = success
+                            data_row_train[constants.kc_success_prefix + concept] = success
+
+                            data_row[constants.kc_failure_prefix + concept] = failure
+                            data_row_train[constants.kc_failure_prefix + concept] = failure
+                        else:
+                            data_row[constants.kc_in_step_prefix + concept] = 1
+                            # data_row[self.pfa_columns.index(constants.kc_success_prefix + str(concept_id))] = success
+                            data_row[constants.kc_attempt_prefix + concept] = attempts
+                            data_row_train[constants.kc_in_step_prefix + concept] = 1
+                            data_row_train[constants.kc_attempt_prefix + concept] = attempts
+                        if self.is_reading_behaviour:
+                            data_row_train[constants.kc_read_attempt_prefix + concept] = read
+                            data_row[constants.kc_read_attempt_prefix + concept] = read
+
+                        if self.seperate_reading_behaviour:
+                            data_row_train[constants.kc_skim_attempt_prefix + concept] = skim
+                            data_row[constants.kc_skim_attempt_prefix + concept] = skim
+
+                        if self.is_student_prior:
+                            student_id = row[constants.student_field]
+                            data_row[constants.student_prior_prefix + str(student_id)] = 1
+                            data_row_train[constants.student_prior_prefix + str(student_id)] = 1
+
+                        if self.is_step_hardness_param:
+                            data_row[constants.step_hardness_prefix + row[constants.item_field]] = 1
+                            data_row_train[constants.step_hardness_prefix + row[constants.item_field]] = 1
+
+                        if fold_id == 0:
+                            all_records_X.append(copy.copy(data_row_train))
+                            all_records_y.append(row[constants.performance_field])
+
+                    folds[fold_id][constants.xtest].append(copy.copy(data_row))
+                    folds[fold_id][constants.ytest].append(row[constants.performance_field])
+        self.allrecords = {'X': all_records_X, "y": all_records_y}
+        # print(len(self.allrecords))
+        self.folds = folds
+
+    def setFolds_inline(self, i_interactions_folds):
+        folds = {}
+        all_records_X = []
+        all_records_y = []
+        for fold_id in i_interactions_folds:
+            folds[fold_id] = {}
+
+            if constants.train_fold in i_interactions_folds[fold_id]:
+                folds[fold_id][constants.xtrain] = []
+                folds[fold_id][constants.ytrain] = []
+                for index, row in i_interactions_folds[fold_id][constants.train_fold].iterrows():
+                    # data_row = [0] * len(self.pfa_columns)
+                    data_row = {}
+                    interaction_id = row[constants.interactionid_field]
+
+                    data_row = {}
+                    concept = row[constants.concept_field]
+                    # concept_id = self.concept2inx[concept]
+                    attempts = row[constants.concept_att_field]
+
+                    # success = interaction_concept_details[interaction_id][concept][1]
+
+                    data_row[constants.kc_in_step_prefix + concept] = 1
+                    data_row[constants.kc_attempt_prefix + concept] = attempts
+
+                    if self.is_student_prior:
+                        # student_id = self.student2inx[row[constants.student_field]]
+                        data_row[constants.student_prior_prefix + row[constants.student_field]] = 1
+
+                    if self.is_step_hardness_param:
+                        # step_inx = self.step2inx[row[constants.item_field]]
+                        data_row[constants.step_hardness_prefix + str(row[constants.item_field])] = 1
+
+                    folds[fold_id][constants.xtrain].append(copy.copy(data_row))
+                    folds[fold_id][constants.ytrain].append(row[constants.performance_field])
+                    if fold_id == 0:
+                        all_records_X.append(copy.copy(data_row))
+                        all_records_y.append(copy.copy(row[constants.performance_field]))
+
+            if constants.test_fold in i_interactions_folds[fold_id]:
+                folds[fold_id][constants.xtest] = []
+                folds[fold_id][constants.ytest] = []
+                for index, row in i_interactions_folds[fold_id][constants.test_fold].iterrows():
+                    # data_row = [0] * len(self.pfa_columns)
+                    data_row = {}
+                    interaction_id = row[constants.interactionid_field]
+
+                    data_row_train = {}
+                    concept = row[constants.concept_field]
+                    # concept_id = self.concept2inx[concept]
+                    attempts = row[constants.concept_att_field]
+
+                    data_row[constants.kc_in_step_prefix + concept] = 1
+                    # data_row[self.pfa_columns.index(constants.kc_success_prefix + str(concept_id))] = success
+                    data_row[constants.kc_attempt_prefix + concept] = attempts
+                    data_row_train[constants.kc_in_step_prefix + concept] = 1
+                    data_row_train[constants.kc_attempt_prefix + concept] = attempts
+
+                    if self.is_student_prior:
+                        student_id = row[constants.student_field]
+                        data_row[constants.student_prior_prefix + str(student_id)] = 1
+                        data_row_train[constants.student_prior_prefix + str(student_id)] = 1
+
+                    if self.is_step_hardness_param:
+                        data_row[constants.step_hardness_prefix + row[constants.item_field]] = 1
+                        data_row_train[constants.step_hardness_prefix + row[constants.item_field]] = 1
+
+                    if fold_id == 0:
+                        all_records_X.append(copy.copy(data_row_train))
+                        all_records_y.append(row[constants.performance_field])
+
+                    folds[fold_id][constants.xtest].append(copy.copy(data_row))
+                    folds[fold_id][constants.ytest].append(row[constants.performance_field])
+        self.allrecords = {'X': all_records_X, "y": all_records_y}
+        print(len(self.allrecords))
+        self.folds = folds
+
+    def fitAIC(self):
+
+        if len(self.folds) == 0:
+            raise ValueError("No folds set!")
+
+        vec = DictVectorizer(sparse=True)
+        X_train = vec.fit_transform(self.allrecords['X'])
+        y_train = self.allrecords['y']
+        clf_aic = LassoLarsIC(criterion='aic', max_iter=100, verbose=True)
+        clf_aic.fit(X_train.todense(), y_train)
+        # print(clf_aic.aic)
+        # plot_ic_criterion(clf_aic,"Model AIC","blue")
+        # print("Argmin AIC: " ,np.argmin(clf_aic.criterion))
+        print("Min AIC: ", np.min(clf_aic.criterion))
+        # clf_bic = LassoLarsIC(criterion='bic', max_iter=100, verbose=True)
+        # clf_bic.fit(X_train.todense(), y_train)
+        # plot_ic_criterion(clf_aic, "Model BIC", "red")
+
+        # clf_l2_LR = LogisticRegression(C=1, penalty=self.penalty, max_iter=self.max_iter)
+        # clf_l2_LR.fit(X_train, y_train)
+        # print(clf_l2_LR.aic)
+
+        return min(clf_aic.criterion)
+
+    def fitFolds(self):
+        if len(self.folds) == 0:
+            raise ValueError("No folds set!")
+
+        for fold_id in self.folds:
+            if constants.model_fold in self.folds[fold_id]:
+                print("already trained")
+                continue
+            fold = self.folds[fold_id]
+            vec = DictVectorizer(sparse=True)
+            X_train = vec.fit_transform(fold[constants.xtrain])
+            y_train = fold[constants.ytrain]
+            clf_l2_LR = LogisticRegression(max_iter=self.max_iter)
+            clf_l2_LR.fit(X_train.toarray(), y_train)
+            self.folds[fold_id][constants.model_fold] = copy.copy(clf_l2_LR)
+            self.folds[fold_id][constants.vectorizer] = copy.copy(vec)
+
+
+    def saveExperiment(self, directory):
+        pickle.dump(self, open(directory + "/" + self.name, 'wb'))
+
+    def predictFolds(self):
+
+        try:
+            if len(self.folds) == 0:
+                raise ValueError("No folds set!")
+
+            for fold_id in self.folds:
+                if 'model' not in self.folds[fold_id]:
+                    print("fold not trained")
+                    self.fitFolds()
+                if constants.prediction_fold in self.folds[fold_id]:
+                    print("folds prediction exists")
+                else:
+                    X_test = self.folds[fold_id][constants.vectorizer].transform(self.folds[fold_id][constants.xtest])
+
+                    self.folds[fold_id][constants.prediction_fold] = self.folds[fold_id][constants.model_fold].predict(
+                        X_test)
+
+
+        except ValueError as ve:
+            print(ve)
+
+    def printResult(self):
+        try:
+            result = []
+            for fold_id in self.folds:
+                if constants.prediction_fold not in self.folds[fold_id]:
+                    print("prediction not done")
+                    self.predictFolds()
+                y_fold_true = self.folds[fold_id][constants.ytest]
+                y_fold_predictions = self.folds[fold_id][constants.prediction_fold]
+                result.append([
+                    roc_auc_score(y_fold_true, y_fold_predictions),
+                    mean_squared_error(y_fold_true, y_fold_predictions)])
+            # print(self.fitAIC())
+
+            print(self.name, np.mean(result, axis=0))
+
+        except ValueError as e:
+            print(e)
+
+            class LFA:
+
+                def __init__(self, penalty='l2', C=0.01, max_iter=1000, name="expName",
+                             student_param=True, step_hardness_param=False, is_pfa=True, interaction_type_read=True,
+                             train=['Read,Quiz'], test=['Quiz']):
+
+                    self.penalty = penalty
+                    self.C = C
+                    self.max_iter = max_iter
+                    self.folds = []
+                    self.allrecords = []
+                    self.is_step_hardness_param = step_hardness_param
+                    self.is_student_prior = student_param
+                    self.name = name
+                    self.is_pfa = is_pfa
+
+                    # self.studentList = student_list
+                    # self.stepList = step_list
+                    # self.concept2inx, self.inx2concept = index.getData2Index(self.concept_list)
+                    # self.student2inx, self.inx2student = index.getData2Index(self.studentList)
+                    # self.step2inx, self.inx2step = index.getData2Index(self.stepList)
+                    # self.pfa_columns = self.def_pfa_columns()
+
+                # def def_pfa_columns(self):
+                #     pfa_columns = []
+                #     pfa_columns.append(constants.item_field)
+                #     for inx in range(len(self.concept_list)):
+                #         concept_inx = str(inx)
+                #         pfa_columns.append(constants.kc_in_step_prefix + concept_inx)
+                #         pfa_columns.append(constants.kc_attempt_prefix + concept_inx)
+                #
+                #     if self.is_step_hardness_param:
+                #         for inx in range(len(self.stepList)):
+                #             step_inx = str(inx)
+                #             pfa_columns.append(constants.step_hardness_prefix + step_inx)
+                #     if self.is_student_prior:
+                #         for inx in range(len(self.studentList)):
+                #             student_inx = str(inx)
+                #             pfa_columns.append(constants.student_prior_prefix + student_inx)
+                #     return pfa_columns
+
+                def loadClass(self, objfile):
+                    self = pickle.load(open(objfile))
+
+                def setFolds(self, i_interactions_folds, interaction_concept_details):
+                    folds = {}
+                    all_records_X = []
+                    all_records_y = []
+                    for fold_id in i_interactions_folds:
+                        folds[fold_id] = {}
+
+                        if constants.train_fold in i_interactions_folds[fold_id]:
+                            folds[fold_id][constants.xtrain] = []
+                            folds[fold_id][constants.ytrain] = []
+                            for index, row in i_interactions_folds[fold_id][constants.train_fold].iterrows():
+                                # data_row = [0] * len(self.pfa_columns)
+                                data_row = {}
+                                interaction_id = row[constants.interactionid_field]
+
+                                for concept in interaction_concept_details[interaction_id]:
+                                    data_row = {}
+                                    concept = str(concept)
+                                    # concept_id = self.concept2inx[concept]
+                                    attempts = interaction_concept_details[interaction_id][concept][0]
+
+                                    # success = interaction_concept_details[interaction_id][concept][1]
+
+                                    data_row[constants.kc_in_step_prefix + concept] = 1
+                                    data_row[constants.kc_attempt_prefix + concept] = attempts + 1
+
+                                    if self.is_student_prior:
+                                        # student_id = self.student2inx[row[constants.student_field]]
+                                        data_row[constants.student_prior_prefix + row[constants.student_field]] = 1
+
+                                    if self.is_step_hardness_param:
+                                        # step_inx = self.step2inx[row[constants.item_field]]
+                                        data_row[constants.step_hardness_prefix + str(row[constants.item_field])] = 1
+
+                                    folds[fold_id][constants.xtrain].append(copy.copy(data_row))
+                                    folds[fold_id][constants.ytrain].append(row[constants.performance_field])
+                                    if fold_id == 0:
+                                        all_records_X.append(copy.copy(data_row))
+                                        all_records_y.append(copy.copy(row[constants.performance_field]))
+
+                        if constants.test_fold in i_interactions_folds[fold_id]:
+                            folds[fold_id][constants.xtest] = []
+                            folds[fold_id][constants.ytest] = []
+                            for index, row in i_interactions_folds[fold_id][constants.test_fold].iterrows():
+                                # data_row = [0] * len(self.pfa_columns)
+                                data_row = {}
+                                interaction_id = row[constants.interactionid_field]
+
+                                for concept in interaction_concept_details[interaction_id]:
+                                    data_row_train = {}
+                                    concept = str(concept)
+                                    # concept_id = self.concept2inx[concept]
+                                    attempts = interaction_concept_details[interaction_id][concept][0]
+                                    success = interaction_concept_details[interaction_id][concept][1]
+
+                                    data_row[constants.kc_in_step_prefix + concept] = 1
+                                    # data_row[self.pfa_columns.index(constants.kc_success_prefix + str(concept_id))] = success
+                                    data_row[constants.kc_attempt_prefix + concept] = attempts
+                                    data_row_train[constants.kc_in_step_prefix + concept] = 1
+                                    data_row_train[constants.kc_attempt_prefix + concept] = attempts
+
+                                    if self.is_student_prior:
+                                        student_id = row[constants.student_field]
+                                        data_row[constants.student_prior_prefix + str(student_id)] = 1
+
+                                    if self.is_step_hardness_param:
+                                        data_row[constants.step_hardness_prefix + row[constants.item_field]] = 1
+
+                                    if fold_id == 0:
+                                        all_records_X.append(copy.copy(data_row_train))
+                                        all_records_y.append(row[constants.performance_field])
+
+                                folds[fold_id][constants.xtest].append(copy.copy(data_row))
+                                folds[fold_id][constants.ytest].append(row[constants.performance_field])
+                    self.allrecords = {'X': all_records_X, "y": all_records_y}
+                    print(len(self.allrecords))
+                    self.folds = folds
+
+                def setFolds_inline(self, i_interactions_folds):
+                    folds = {}
+                    all_records_X = []
+                    all_records_y = []
+                    for fold_id in i_interactions_folds:
+                        folds[fold_id] = {}
+
+                        if constants.train_fold in i_interactions_folds[fold_id]:
+                            folds[fold_id][constants.xtrain] = []
+                            folds[fold_id][constants.ytrain] = []
+                            for index, row in i_interactions_folds[fold_id][constants.train_fold].iterrows():
+                                # data_row = [0] * len(self.pfa_columns)
+                                data_row = {}
+                                interaction_id = row[constants.interactionid_field]
+
+                                data_row = {}
+                                concept = row[constants.concept_field]
+                                # concept_id = self.concept2inx[concept]
+                                attempts = row[constants.concept_att_field]
+
+                                # success = interaction_concept_details[interaction_id][concept][1]
+
+                                data_row[constants.kc_in_step_prefix + concept] = 1
+                                data_row[constants.kc_attempt_prefix + concept] = attempts
+
+                                if self.is_student_prior:
+                                    # student_id = self.student2inx[row[constants.student_field]]
+                                    data_row[constants.student_prior_prefix + row[constants.student_field]] = 1
+
+                                if self.is_step_hardness_param:
+                                    # step_inx = self.step2inx[row[constants.item_field]]
+                                    data_row[constants.step_hardness_prefix + str(row[constants.item_field])] = 1
+
+                                folds[fold_id][constants.xtrain].append(copy.copy(data_row))
+                                folds[fold_id][constants.ytrain].append(row[constants.performance_field])
+                                if fold_id == 0:
+                                    all_records_X.append(copy.copy(data_row))
+                                    all_records_y.append(copy.copy(row[constants.performance_field]))
+
+                        if constants.test_fold in i_interactions_folds[fold_id]:
+                            folds[fold_id][constants.xtest] = []
+                            folds[fold_id][constants.ytest] = []
+                            for index, row in i_interactions_folds[fold_id][constants.test_fold].iterrows():
+                                # data_row = [0] * len(self.pfa_columns)
+                                data_row = {}
+                                interaction_id = row[constants.interactionid_field]
+
+                                data_row_train = {}
+                                concept = row[constants.concept_field]
+                                # concept_id = self.concept2inx[concept]
+                                attempts = row[constants.concept_att_field]
+
+                                data_row[constants.kc_in_step_prefix + concept] = 1
+                                # data_row[self.pfa_columns.index(constants.kc_success_prefix + str(concept_id))] = success
+                                data_row[constants.kc_attempt_prefix + concept] = attempts
+                                data_row_train[constants.kc_in_step_prefix + concept] = 1
+                                data_row_train[constants.kc_attempt_prefix + concept] = attempts
+
+                                if self.is_student_prior:
+                                    student_id = row[constants.student_field]
+                                    data_row[constants.student_prior_prefix + str(student_id)] = 1
+                                    data_row_train[constants.student_prior_prefix + str(student_id)] = 1
+
+                                if self.is_step_hardness_param:
+                                    data_row[constants.step_hardness_prefix + row[constants.item_field]] = 1
+                                    data_row_train[constants.step_hardness_prefix + row[constants.item_field]] = 1
+
+                                if fold_id == 0:
+                                    all_records_X.append(copy.copy(data_row_train))
+                                    all_records_y.append(row[constants.performance_field])
+
+                                folds[fold_id][constants.xtest].append(copy.copy(data_row))
+                                folds[fold_id][constants.ytest].append(row[constants.performance_field])
+                    self.allrecords = {'X': all_records_X, "y": all_records_y}
+                    print(len(self.allrecords))
+                    self.folds = folds
+
+                def fitAIC(self):
+                    try:
+                        if len(self.folds) == 0:
+                            raise ValueError("No folds set!")
+
+                        vec = DictVectorizer(sparse=True)
+                        X_train = vec.fit_transform(self.allrecords['X'])
+                        y_train = self.allrecords['y']
+                        clf_aic = LassoLarsIC(criterion='aic', max_iter=3000, verbose=True)
+                        clf_aic.fit(X_train.todense(), y_train)
+                        # plot_ic_criterion(clf_aic, "Model AIC", "blue")
+                        # print("Argmin AIC: " ,np.argmin(clf_aic.criterion))
+                        # print("Min AIC: " ,np.min(clf_aic.criterion))
+                        clf_bic = LassoLarsIC(criterion='bic', max_iter=3000, verbose=True)
+                        clf_bic.fit(X_train.todense(), y_train)
+                        # plot_ic_criterion(clf_aic, "Model BIC", "red")
+
+                        clf_l2_LR = LogisticRegression(C=self.C, penalty=self.penalty, max_iter=self.max_iter)
+                        clf_l2_LR.fit(X_train, y_train)
+                        print(clf_l2_LR.aic)
+
+
+
+
+                    except ValueError as ve:
+                        print(ve)
+                    except Exception as e:
+                        print(e)
+
+                def fitFolds(self):
+                    if len(self.folds) == 0:
+                        raise ValueError("No folds set!")
+
+                    for fold_id in self.folds:
+                        if constants.model_fold in self.folds[fold_id]:
+                            print("already trained")
+                            continue
+                        fold = self.folds[fold_id]
+                        vec = DictVectorizer(sparse=True)
+                        X_train = vec.fit_transform(fold[constants.xtrain])
+                        y_train = fold[constants.ytrain]
+                        clf_l2_LR = LogisticRegression(max_iter=self.max_iter)
+                        clf_l2_LR.fit(X_train.toarray(), y_train)
+                        self.folds[fold_id][constants.model_fold] = copy.copy(clf_l2_LR)
+                        self.folds[fold_id][constants.vectorizer] = copy.copy(vec)
+
+                def saveExperiment(self, directory):
+                    pickle.dump(self, open(directory + "/" + self.name, 'wb'))
+
+                def predictFolds(self):
+
+                    try:
+                        if len(self.folds) == 0:
+                            raise ValueError("No folds set!")
+
+                        for fold_id in self.folds:
+                            if 'model' not in self.folds[fold_id]:
+                                print("fold not trained")
+                                self.fitFolds()
+                            if constants.prediction_fold in self.folds[fold_id]:
+                                print("folds prediction exists")
+                            else:
+                                X_test = self.folds[fold_id][constants.vectorizer].transform(
+                                    self.folds[fold_id][constants.xtest])
+
+                                self.folds[fold_id][constants.prediction_fold] = self.folds[fold_id][
+                                    constants.model_fold].predict(
+                                    X_test)
+
+
+                    except ValueError as ve:
+                        print(ve)
+
+                def printResult(self):
+                    try:
+                        result = []
+                        for fold_id in self.folds:
+                            if constants.prediction_fold not in self.folds[fold_id]:
+                                print("prediction not done")
+                                self.predictFolds()
+                            y_fold_true = self.folds[fold_id][constants.ytest]
+                            y_fold_predictions = self.folds[fold_id][constants.prediction_fold]
+                            result.append([
+                                roc_auc_score(y_fold_true, y_fold_predictions),
+                                mean_squared_error(y_fold_true, y_fold_predictions)])
+
+                        print(self.name, np.mean(result, axis=0))
+
+                    except ValueError as e:
+                        print(e)

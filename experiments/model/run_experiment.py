@@ -5,7 +5,7 @@ import time
 import pandas as pd
 
 from experiments.config import constants
-from experiments.model.models import LFA
+from experiments.model.models import LFA_R
 from experiments.model.preprocessor import DataProcessor, Concepts
 
 start_time = time.time()
@@ -13,17 +13,17 @@ start_time = time.time()
 if __name__ == '__main__':
 
     data_folder = "data/"
-    Discretization_type = 'DiscByCollegeNormal300wpm'
+    Discretization_type = 'DiscPerDoc'
     interaction_data_file = 'data/interaction_data/data_{dataname}.pkl'
-    student_split_percent = .5
-    interactions_split_percent = .96
-    no_of_folds = 10
+    student_split_percent = .7
+    interactions_split_percent = .5
+    no_of_folds = 5
     student_interaction_file = "IR_17Fall_Preproc2.csv"
-    concept_file_folder = 'concept_files/lda/'
+    concept_file_folder = 'concept_files/gold/'
 
     df_interactions = pd.read_csv(data_folder + student_interaction_file)
     if constants.debug:
-        df_interactions = df_interactions.head(600)
+        df_interactions = df_interactions.head(6000)
 
     df_interactions[constants.item_field] = ""
     df_interactions[constants.interaction_type] = 'Read'
@@ -40,12 +40,14 @@ if __name__ == '__main__':
             df_interactions.loc[index, constants.performance_field] = row[Discretization_type]
 
 
+
     int_data = DataProcessor(df_interactions)
     concept_dictionary = {}
 
+
     for concept_file in os.listdir(data_folder + concept_file_folder):
 
-        for topn in [5]:
+        for topn in [100]:
             concept_name = concept_file.split("\.")[0]
             concept_name = concept_name + " : " + str(topn)
             concept_obj = Concepts(name=concept_name,
@@ -59,10 +61,20 @@ if __name__ == '__main__':
 
     for concept_list_name in concept_dictionary:
         concept_obj = concept_dictionary[concept_list_name]
+        int_data.get_concept_distribution(dconcepts=concept_obj)
         int_folds = int_data.get_factor_analysis_interaction_folds(interaction_folds, constants.fields)
         int_con_attempts = int_data.get_interaction_concept_attempts(concept_obj)
-        pfa_mod = LFA(concept_obj.concept_list, int_data.studentList, name="lfa" + concept_obj.conceptlistname)
+        print("without reading Behaviour")
+        pfa_mod = LFA_R(concept_obj.concept_list, int_data.studentList, name="lfa" + concept_obj.conceptlistname,
+                        is_reading_behaviour=False)
+        pfa_mod.setFolds(int_folds, int_con_attempts)
+        pfa_mod.fitFolds()
+        pfa_mod.predictFolds()
+        pfa_mod.printResult()
 
+        print("with reading Behaviour")
+        pfa_mod = LFA_R(concept_obj.concept_list, int_data.studentList, name="lfa" + concept_obj.conceptlistname,
+                        is_reading_behaviour=True)
         pfa_mod.setFolds(int_folds, int_con_attempts)
         pfa_mod.fitFolds()
         pfa_mod.predictFolds()
